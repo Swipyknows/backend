@@ -1,0 +1,1 @@
+Gaining knowledge i dont think whether i am stepping in the same field. But lets see i hope for maximum gain knowledge is what it is.. HAVE FUN!!
