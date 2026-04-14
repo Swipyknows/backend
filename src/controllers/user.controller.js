@@ -13,16 +13,21 @@ const registerUser=asynchandler(async(req,res)=>{
     // remove password and refresh token field from response
     // check for user creation
     // return res
-    const {fullName, email, username, password }=req.body
-    console.log("email",email);
+    console.log("FULL REQ.BODY:", req.body);
+    console.log("FULL REQ.FILES:", req.files);
+    
+    const {fullName, email, username, password }=req.body || {};
+    console.log("Destructured - fullName:", fullName, "email:", email, "username:", username, "password:", password);
     // if(fullName === ""){
     //     throw new ApiError(400,"fullname is required");
     // }
     if(
         [fullName,email,password,username].some((field)=>field?.trim() === "")
     ){
+        console.log("VALIDATION FAILED - Empty field detected");
         throw new ApiError(400,"All fields are required");
     }
+    console.log("VALIDATION PASSED - All fields present");
 
     const existedUser = await User.findOne({
         $or:[{username},{email}]
@@ -44,9 +49,9 @@ const registerUser=asynchandler(async(req,res)=>{
         throw new ApiError(400,"Avatar is required")    
     }
     const user = await User.create({
-        fullName,
+        fullname: fullName,
         avatar:avatar.url,
-        coverImage:coverImage?.url || "",
+        coverimage:coverImage?.url || "",
         email,
         password,
         username:username.toLowerCase()
@@ -59,4 +64,5 @@ const registerUser=asynchandler(async(req,res)=>{
         new Response(201,createdUser,"User registered successfully")
     )
 })
+
 export {registerUser};
