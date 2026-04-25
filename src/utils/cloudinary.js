@@ -15,8 +15,9 @@ const uploadOnCloudinary=async (localfilepath) => {
         return response;
     }
     catch(error){
-        fs.unlink(localfilepath)
+        await fs.promises.unlink(localfilepath).catch(err => console.error("Failed to delete temp file:", err));
         return null;
     }
 }
+
 export {uploadOnCloudinary};
