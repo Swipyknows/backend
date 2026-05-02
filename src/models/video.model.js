@@ -22,11 +22,11 @@ const videoSchema=new Schema(
         type:Number,
         required:true
     },
-    veiws:{
+    views:{
         type:Number,
         default:0
     },
-    ispublisher:{
+    ispublisher:{ 
         type:Boolean,
         default:true
     },
