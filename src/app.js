@@ -18,6 +18,14 @@ console.log("USER ROUTER IMPORTED:", typeof userRouter);
 app.use("/api/v1/users",userRouter);
 console.log("ROUTES REGISTERED");
 
+//comment routes
+import commentRouter from "./routes/comment.routes.js";
+app.use("/api/v1/comments",commentRouter)
+
+//like routes
+import likeRouter from "./routes/like.routes.js";
+app.use("/api/v1/likes",likeRouter)
+
 // 404 handler - must be before error handler
 app.use((req, res) => {
     console.log("404 - Route not found:", req.method, req.url);
