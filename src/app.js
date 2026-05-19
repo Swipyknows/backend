@@ -26,6 +26,10 @@ app.use("/api/v1/comments",commentRouter)
 import likeRouter from "./routes/like.routes.js";
 app.use("/api/v1/likes",likeRouter)
 
+//subscription routes
+import subscriptionRouter from "./routes/subscription.routes.js";
+app.use("/api/v1/subscriptions",subscriptionRouter)
+
 // 404 handler - must be before error handler
 app.use((req, res) => {
     console.log("404 - Route not found:", req.method, req.url);

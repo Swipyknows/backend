@@ -15,10 +15,9 @@ const addComment = asynchandler(async (req,res)=>{
         video:videoId,
         user:req.user._id
     })
-    return new Response(res)
-    .status(201)
-    .json(
-        new ApiResponse("Comment added successfully",comment)
+    console.log("Comment created:", comment);
+    return res.status(201).json(
+        new Response(201,comment,"Comment added successfully")
     )
 })
 
@@ -28,10 +27,8 @@ const getVideoComments =asynchandler(async (req,res)=>{
     .find({video:videoId})
     .populate("owner","username avatar")
     .sort({createdAt:-1})
-    return new Response(res)
-    .status(200)
-    .json(
-        new ApiResponse("Video comments fetched successfully",comments)
+    return res.status(200).json(
+        new Response(200,comments,"Video comments fetched successfully")
     )
 })
 
@@ -45,10 +42,8 @@ const deleteComment = asynchandler(async (req,res)=>{
         throw new ApiError(403,"Unauthorized")
     }
     await Comment.findByIdAndDelete(commentId)
-    return new Response(res)
-    .status(200)
-    .json(
-        new ApiResponse(200,{},"Comment deleted")
+    return res.status(200).json(
+        new Response(200,{},"Comment deleted")
     )
 })
 export {

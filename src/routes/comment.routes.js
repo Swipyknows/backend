@@ -4,7 +4,8 @@ import {
    getVideoComments,
    deleteComment
 } from "../controllers/comment.controller.js"
-
+import {User} from "../models/user.model.js"
+import {Video} from "../models/video.model.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js"
 
 const commentRouter = Router()
