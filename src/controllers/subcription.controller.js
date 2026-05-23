@@ -5,7 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import {Response} from "../utils/apiresponse.js"
 import {Subscription} from "../models/subscription.model.js"
 
-const subscriberorunsubscribe = asynchandler(async (req,res)=>{
+const subscribeOrUnsubscribe = asynchandler(async (req,res)=>{
     const {channelId} = req.params;
     const userId = req.user._id;
     if(channelId.toString() === userId.toString()){
@@ -32,3 +32,5 @@ const subscriberorunsubscribe = asynchandler(async (req,res)=>{
         new Response(200,{},isSubscribed?"Unsubscribed successfully":"Subscribed successfully")
     )
 })
+
+export {subscribeOrUnsubscribe}

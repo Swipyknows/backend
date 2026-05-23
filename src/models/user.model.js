@@ -15,7 +15,7 @@ const userSchema=new Schema({
         required:true,
         lowercase:true,
         unique:true,
-        trim:true,
+        trim:true
     },
     fullname:{
         type: String,
@@ -78,5 +78,4 @@ userSchema.methods.generateRefreshToken=function(){
     }
 )
 }
-
 export const User=mongoose.model("User",userSchema)
