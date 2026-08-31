@@ -59,8 +59,8 @@ const getAllVideos = asynchandler(async (req, res) => {
 
     const videoAggregate = Video.aggregate(pipeline);
     const paginatedVideos = await Video.aggregatePaginate(videoAggregate, options);
-
-    return res.status(200).json(new Response(true, "Videos fetched successfully", paginatedVideos))
+    console.log(paginatedVideos)
+    return res.status(200).json(new Response(true, paginatedVideos, "Videos fetched successfully"))
 })
 
 const publishAVideo = asynchandler(async (req, res) => {
@@ -76,13 +76,13 @@ const publishAVideo = asynchandler(async (req, res) => {
     const video = await Video.create({
         title,
         description,
-        videoUrl,
-        thumbnailUrl,
+        video: videoUrl,
+        thumbnail: thumbnailUrl,
         owner: req.user._id,
         ispublisher: true
     })
     return res.status(201)
-    .json(new Response(true, "Video published successfully", video))
+    .json(new Response(true, video, "Video published successfully"))
 })
 
 const getVideoById = asynchandler(async (req, res) => {
@@ -93,7 +93,7 @@ const getVideoById = asynchandler(async (req, res) => {
         throw new ApiError(404, "Video not found")
     }
     return res.status(200)
-    .json(new Response(true, "Video fetched successfully", video))
+    .json(new Response(true, video, "Video fetched successfully"))
 })
 
 const updateVideo = asynchandler(async (req, res) => {
@@ -108,7 +108,7 @@ const updateVideo = asynchandler(async (req, res) => {
     video.description = description || video.description
     await video.save()
     return res.status(200)
-    .json(new Response(true, "Video updated successfully", video))
+    .json(new Response(true, video, "Video updated successfully"))
 })
 
 const deleteVideo = asynchandler(async (req, res) => {
@@ -117,7 +117,7 @@ const deleteVideo = asynchandler(async (req, res) => {
     if(!video){
         throw new ApiError(404, "Video not found")
     }
-    Video.findByIdAndDelete(videoId)
+    await Video.findByIdAndDelete(videoId)
     return res.status(200)
     .json(new Response(true, "Video deleted successfully"))
     //TODO: delete video
@@ -135,14 +135,33 @@ const togglePublishStatus = asynchandler(async (req, res) => {
     video.ispublisher = !video.ispublisher
     await video.save()
     return res.status(200)
-    .json(new Response(true, `Video ${video.ispublisher ? "published" : "unpublished"} successfully`, video))
+    .json(new Response(true, video, `Video ${video.ispublisher ? "published" : "unpublished"} successfully`))
 })
-
+const uploadVideo = asynchandler(async (req, res) => {
+    const videofile = req.files?.video[0]?.path;
+    const thumbnailfile = req.files?.thumbnail[0]?.path;
+    const { title, description } = req.body;
+    if(!videofile || !thumbnailfile || !title || !description){
+        throw new ApiError(400,"All fields are required")
+    }
+    const videoResponse = await uploadOnCloudinary(videofile)
+    const thumbnailResponse = await uploadOnCloudinary(thumbnailfile)
+    const video = await Video.create({
+        title,
+        description,
+        videofile: videoResponse.secure_url,
+        thumbnail: thumbnailResponse.secure_url,
+        owner: req.user._id
+    })
+    return res.status(200)
+    .json(new Response(true, video, "Video uploaded successfully"))
+})
 export {
     getAllVideos,
     publishAVideo,
     getVideoById,
     updateVideo,
     deleteVideo,
-    togglePublishStatus
+    togglePublishStatus,
+    uploadVideo
 }
