@@ -5,6 +5,7 @@ import {Like} from "../models/like.model.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import {Response} from "../utils/apiresponse.js"
 import {Comment} from "../models/comment.model.js"
+import { queueUserInterestJob } from "../queues/recommendation.queue.js"
 
 const likeVideoOrComment = asynchandler(async (req,res)=>{
     const {videoId,commentId} = req.params;
@@ -22,6 +23,9 @@ const likeVideoOrComment = asynchandler(async (req,res)=>{
             video:videoId,
             comment:commentId
         })
+    }
+    if (videoId) {
+        await queueUserInterestJob(likedBy);
     }
     return res.status(200).json(
         new Response(200,{},(videoId?"Video like toggled":"Comment like toggled"))

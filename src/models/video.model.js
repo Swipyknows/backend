@@ -33,6 +33,14 @@ const videoSchema=new Schema(
         type:Schema.Types.ObjectId,
         ref:"User",
         required:true
+    },
+    descriptionVector: {
+        type: [Number],
+        default: []
+    },
+    tags: {
+        type: [String],
+        default: []
     }
 },{timestamps:true})
 videoSchema.plugin(mongooseAggregatePaginate)
