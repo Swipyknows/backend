@@ -43,6 +43,13 @@ const userSchema=new Schema({
     },
     refreshToken:{
         type:String
+    },
+    interestVector: {
+        type: [Number],
+        default: []
+    },
+    lastVectorUpdate: {
+        type: Date
     }
 },
 {
