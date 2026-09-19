@@ -6,6 +6,7 @@ import { Response } from "../utils/apiresponse.js"
 import { asynchandler } from "../utils/asynchandler.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { invalidatePattern } from "../utils/cache.invalidate.js"
+import { queueVideoEmbeddingJob, queueUserInterestJob } from "../queues/recommendation.queue.js"
 
 const getAllVideos = asynchandler(async (req, res) => {
     const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query
@@ -82,6 +83,10 @@ const publishAVideo = asynchandler(async (req, res) => {
         owner: req.user._id,
         ispublisher: true
     })
+    
+    // Trigger background embedding generation
+    await queueVideoEmbeddingJob(video._id);
+
     return res.status(201)
         .json(new Response(true, video, "Video published successfully"))
 })
@@ -93,6 +98,19 @@ const getVideoById = asynchandler(async (req, res) => {
     if (!video) {
         throw new ApiError(404, "Video not found")
     }
+
+    // Increment view count
+    video.views = (video.views || 0) + 1;
+    await video.save();
+
+    // If logged in, add to watchhistory and trigger interest update
+    if (req.user?._id) {
+        await User.findByIdAndUpdate(req.user._id, {
+            $addToSet: { watchhistory: video._id }
+        });
+        await queueUserInterestJob(req.user._id);
+    }
+
     return res.status(200)
         .json(new Response(true, video, "Video fetched successfully"))
 })
@@ -109,6 +127,10 @@ const updateVideo = asynchandler(async (req, res) => {
     video.description = description || video.description
     await video.save()
     invalidatePattern("videos_list:*");
+    
+    // Re-generate vector embedding if content changed
+    await queueVideoEmbeddingJob(video._id);
+
     return res.status(200)
         .json(new Response(true, video, "Video updated successfully"))
 })
@@ -156,6 +178,10 @@ const uploadVideo = asynchandler(async (req, res) => {
         thumbnail: thumbnailResponse.secure_url,
         owner: req.user._id
     })
+
+    // Trigger background embedding generation
+    await queueVideoEmbeddingJob(video._id);
+
     return res.status(200)
         .json(new Response(true, video, "Video uploaded successfully"))
 })
