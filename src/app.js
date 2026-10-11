@@ -34,6 +34,10 @@ app.use("/api/v1/subscriptions",subscriptionRouter)
 import videoRouter from "./routes/video.routes.js";
 app.use("/api/v1/videos",videoRouter)
 
+//recommendation routes
+import recommendationRouter from "./routes/recommendation.routes.js";
+app.use("/api/v1/recommendations", recommendationRouter);
+
 // 404 handler - must be before error handler
 app.use((req, res) => {
     console.log("404 - Route not found:", req.method, req.url);
