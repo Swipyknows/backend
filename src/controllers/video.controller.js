@@ -4,8 +4,9 @@ import { User } from "../models/user.model.js"
 import { ApiError } from "../utils/apierror.js"
 import { Response } from "../utils/apiresponse.js"
 import { asynchandler } from "../utils/asynchandler.js"
-import { uploadOnCloudinary } from "../utils/cloudinary.js"
+import { uploadOnCloudinary, deleteLocalFile } from "../utils/cloudinary.js"
 import { invalidatePattern } from "../utils/cache.invalidate.js"
+import jwt from "jsonwebtoken"
 
 const getAllVideos = asynchandler(async (req, res) => {
     const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query
@@ -67,34 +68,135 @@ const getAllVideos = asynchandler(async (req, res) => {
 const publishAVideo = asynchandler(async (req, res) => {
     const { title, description } = req.body
     // TODO: get video, upload to cloudinary, create video
-    const videofile = req.files?.video[0]?.path;
-    const thumbnailfile = req.files?.thumbnail[0]?.path;
-    if (!videofile || !thumbnailfile) {
-        throw new ApiError(400, "Video file and thumbnail are required")
+    const videofile = req.files?.video?.[0]?.path;
+    const thumbnailfile = req.files?.thumbnail?.[0]?.path;
+    if (!videofile || !thumbnailfile || !title || !description) {
+        if (videofile) deleteLocalFile(videofile);
+        if (thumbnailfile) deleteLocalFile(thumbnailfile);
+        throw new ApiError(400, "All fields (title, description, video file and thumbnail) are required")
     }
     const videoUrl = await uploadOnCloudinary(videofile, "video")
     const thumbnailUrl = await uploadOnCloudinary(thumbnailfile, "image")
+    if (!videoUrl?.url && !videoUrl?.secure_url) {
+        throw new ApiError(400, "Video upload failed");
+    }
     const video = await Video.create({
         title,
         description,
-        video: videoUrl,
-        thumbnail: thumbnailUrl,
+        videofile: videoUrl.secure_url || videoUrl.url,
+        thumbnail: thumbnailUrl?.secure_url || thumbnailUrl?.url || "",
+        duration: videoUrl.duration || 0,
         owner: req.user._id,
         ispublisher: true
     })
+    invalidatePattern("videos_list:*");
     return res.status(201)
         .json(new Response(true, video, "Video published successfully"))
 })
 
 const getVideoById = asynchandler(async (req, res) => {
-    const { videoId } = req.params
-    //TODO: get video by id
-    const video = await Video.findById(videoId)
-    if (!video) {
-        throw new ApiError(404, "Video not found")
+    const { videoId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(videoId)) {
+        throw new ApiError(400, "Invalid video ID");
     }
+
+    // Increment video view count
+    await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
+
+    // Extract user ID if logged in (from middleware or token)
+    let userId = req.user?._id;
+    if (!userId) {
+        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+        if (token) {
+            try {
+                const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+                if (decodedToken?._id) {
+                    userId = decodedToken._id;
+                }
+            } catch (err) {
+                // optional auth fail-open
+            }
+        }
+    }
+
+    const userObjectId = userId ? new mongoose.Types.ObjectId(userId) : null;
+
+    const videoAggregate = await Video.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(videoId)
+            }
+        },
+        {
+            $lookup: {
+                from: "likes",
+                localField: "_id",
+                foreignField: "video",
+                as: "likes"
+            }
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner"
+            }
+        },
+        {
+            $unwind: "$owner"
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "owner._id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+        },
+        {
+            $addFields: {
+                likesCount: { $size: "$likes" },
+                isLiked: userObjectId
+                    ? { $in: [userObjectId, "$likes.likedBy"] }
+                    : false,
+                subscribersCount: { $size: "$subscribers" },
+                isSubscribed: userObjectId
+                    ? { $in: [userObjectId, "$subscribers.subscriber"] }
+                    : false
+            }
+        },
+        {
+            $project: {
+                _id: 1,
+                videoFile: { $ifNull: ["$videofile", "$videoFile"] },
+                thumbnail: 1,
+                title: 1,
+                description: 1,
+                duration: 1,
+                views: 1,
+                createdAt: 1,
+                isLiked: 1,
+                likesCount: 1,
+                owner: {
+                    _id: "$owner._id",
+                    username: "$owner.username",
+                    fullname: "$owner.fullname",
+                    avatar: "$owner.avatar",
+                    subscribersCount: "$subscribersCount",
+                    isSubscribed: "$isSubscribed"
+                }
+            }
+        }
+    ]);
+
+    if (!videoAggregate?.length) {
+        throw new ApiError(404, "Video not found");
+    }
+
     return res.status(200)
-        .json(new Response(true, video, "Video fetched successfully"))
+        .json(new Response(200, videoAggregate[0], "Video fetched successfully"));
 })
 
 const updateVideo = asynchandler(async (req, res) => {
@@ -141,21 +243,28 @@ const togglePublishStatus = asynchandler(async (req, res) => {
         .json(new Response(true, video, `Video ${video.ispublisher ? "published" : "unpublished"} successfully`))
 })
 const uploadVideo = asynchandler(async (req, res) => {
-    const videofile = req.files?.video[0]?.path;
-    const thumbnailfile = req.files?.thumbnail[0]?.path;
+    const videofile = req.files?.video?.[0]?.path;
+    const thumbnailfile = req.files?.thumbnail?.[0]?.path;
     const { title, description } = req.body;
     if (!videofile || !thumbnailfile || !title || !description) {
-        throw new ApiError(400, "All fields are required")
+        if (videofile) deleteLocalFile(videofile);
+        if (thumbnailfile) deleteLocalFile(thumbnailfile);
+        throw new ApiError(400, "All fields (title, description, video, thumbnail) are required")
     }
-    const videoResponse = await uploadOnCloudinary(videofile)
-    const thumbnailResponse = await uploadOnCloudinary(thumbnailfile)
+    const videoResponse = await uploadOnCloudinary(videofile, "video")
+    const thumbnailResponse = await uploadOnCloudinary(thumbnailfile, "image")
+    if (!videoResponse?.secure_url && !videoResponse?.url) {
+        throw new ApiError(400, "Video upload failed");
+    }
     const video = await Video.create({
         title,
         description,
-        videofile: videoResponse.secure_url,
-        thumbnail: thumbnailResponse.secure_url,
+        videofile: videoResponse.secure_url || videoResponse.url,
+        thumbnail: thumbnailResponse?.secure_url || thumbnailResponse?.url || "",
+        duration: videoResponse.duration || 0,
         owner: req.user._id
     })
+    invalidatePattern("videos_list:*");
     return res.status(200)
         .json(new Response(true, video, "Video uploaded successfully"))
 })
