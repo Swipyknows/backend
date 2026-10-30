@@ -6,32 +6,18 @@ import { Response } from "../utils/apiresponse.js"
 import { asynchandler } from "../utils/asynchandler.js"
 import { uploadOnCloudinary, deleteLocalFile } from "../utils/cloudinary.js"
 import { invalidatePattern } from "../utils/cache.invalidate.js"
-<<<<<<< HEAD
 import jwt from "jsonwebtoken"
-=======
-import { queueVideoEmbeddingJob, queueUserInterestJob } from "../queues/recommendation.queue.js"
->>>>>>> e326dd9f75abb43b342ae6f008124349207e5c53
 
 const getAllVideos = asynchandler(async (req, res) => {
-    const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query
-    //TODO: get all videos based on query, sort, pagination
+    const { page = 1, limit = 12, query, sortBy, sortType, userId } = req.query;
     const pipeline = [];
 
-    if (query) {
-        pipeline.push({
-            $match: {
-                $or: [
-                    { title: { $regex: query, $options: "i" } },
-                    { description: { $regex: query, $options: "i" } },
-                    {
-                        "owner.username": { $regex: query, $options: "i" }
-                    }
-                ]
-            }
-        });
-    }
+    // Filter published videos
+    pipeline.push({
+        $match: { ispublisher: true }
+    });
 
-    if (userId) {
+    if (userId && isValidObjectId(userId)) {
         pipeline.push({
             $match: {
                 owner: new mongoose.Types.ObjectId(userId)
@@ -39,9 +25,47 @@ const getAllVideos = asynchandler(async (req, res) => {
         });
     }
 
-    pipeline.push({
-        $match: { ispublisher: true }
-    });
+    // Lookup video creator details
+    pipeline.push(
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+                pipeline: [
+                    {
+                        $project: {
+                            username: 1,
+                            fullname: 1,
+                            avatar: 1
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            $addFields: {
+                owner: { $first: "$owner" }
+            }
+        }
+    );
+
+    // Search query matching across title, description, tags, and creator name
+    if (query?.trim()) {
+        const cleanQuery = query.trim();
+        pipeline.push({
+            $match: {
+                $or: [
+                    { title: { $regex: cleanQuery, $options: "i" } },
+                    { description: { $regex: cleanQuery, $options: "i" } },
+                    { tags: { $regex: cleanQuery, $options: "i" } },
+                    { "owner.username": { $regex: cleanQuery, $options: "i" } },
+                    { "owner.fullname": { $regex: cleanQuery, $options: "i" } }
+                ]
+            }
+        });
+    }
 
     if (sortBy && sortType) {
         const sortOrder = sortType === "desc" ? -1 : 1;
@@ -59,15 +83,14 @@ const getAllVideos = asynchandler(async (req, res) => {
     }
 
     const options = {
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10)
+        page: parseInt(page, 10) || 1,
+        limit: parseInt(limit, 10) || 12
     };
 
     const videoAggregate = Video.aggregate(pipeline);
     const paginatedVideos = await Video.aggregatePaginate(videoAggregate, options);
-    console.log(paginatedVideos)
-    return res.status(200).json(new Response(true, paginatedVideos, "Videos fetched successfully"))
-})
+    return res.status(200).json(new Response(true, paginatedVideos, "Videos fetched successfully"));
+});
 
 const publishAVideo = asynchandler(async (req, res) => {
     const { title, description } = req.body
@@ -93,14 +116,7 @@ const publishAVideo = asynchandler(async (req, res) => {
         owner: req.user._id,
         ispublisher: true
     })
-<<<<<<< HEAD
     invalidatePattern("videos_list:*");
-=======
-    
-    // Trigger background embedding generation
-    await queueVideoEmbeddingJob(video._id);
-
->>>>>>> e326dd9f75abb43b342ae6f008124349207e5c53
     return res.status(201)
         .json(new Response(true, video, "Video published successfully"))
 })
@@ -112,7 +128,6 @@ const getVideoById = asynchandler(async (req, res) => {
         throw new ApiError(400, "Invalid video ID");
     }
 
-<<<<<<< HEAD
     // Increment video view count
     await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
 
@@ -205,18 +220,6 @@ const getVideoById = asynchandler(async (req, res) => {
 
     if (!videoAggregate?.length) {
         throw new ApiError(404, "Video not found");
-=======
-    // Increment view count
-    video.views = (video.views || 0) + 1;
-    await video.save();
-
-    // If logged in, add to watchhistory and trigger interest update
-    if (req.user?._id) {
-        await User.findByIdAndUpdate(req.user._id, {
-            $addToSet: { watchhistory: video._id }
-        });
-        await queueUserInterestJob(req.user._id);
->>>>>>> e326dd9f75abb43b342ae6f008124349207e5c53
     }
 
     return res.status(200)
@@ -235,7 +238,7 @@ const updateVideo = asynchandler(async (req, res) => {
     video.description = description || video.description
     await video.save()
     invalidatePattern("videos_list:*");
-    
+
     // Re-generate vector embedding if content changed
     await queueVideoEmbeddingJob(video._id);
 
@@ -292,14 +295,7 @@ const uploadVideo = asynchandler(async (req, res) => {
         duration: videoResponse.duration || 0,
         owner: req.user._id
     })
-<<<<<<< HEAD
     invalidatePattern("videos_list:*");
-=======
-
-    // Trigger background embedding generation
-    await queueVideoEmbeddingJob(video._id);
-
->>>>>>> e326dd9f75abb43b342ae6f008124349207e5c53
     return res.status(200)
         .json(new Response(true, video, "Video uploaded successfully"))
 })

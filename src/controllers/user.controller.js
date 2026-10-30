@@ -106,9 +106,22 @@ const loginuser = asynchandler(async (req, res) => {
     if (!(username || email)) {
         throw new ApiError(400, "Username or email is required")
     }
-    const user = await User.findOne({
-        $or: [{ username }, { email }]
-    })
+    if (!password) {
+        throw new ApiError(400, "Password is required")
+    }
+
+    // A user might enter either their username or email into the form field
+    const conditions = [];
+    if (username?.trim()) {
+        const u = username.trim().toLowerCase();
+        conditions.push({ username: u }, { email: u });
+    }
+    if (email?.trim()) {
+        const e = email.trim().toLowerCase();
+        conditions.push({ email: e }, { username: e });
+    }
+
+    const user = await User.findOne({ $or: conditions });
     if (!user) {
         throw new ApiError(404, "User not found")
     }
@@ -116,7 +129,7 @@ const loginuser = asynchandler(async (req, res) => {
     if (!isPasswordValid) {
         throw new ApiError(401, "Invalid password")
     }
-    console.log("USER FOUND:", user);
+    console.log("USER FOUND:", user.username);
     const { accessToken, refreshToken } = await generateAccessandRefreshToken(user._id);
 
     const loggedinUser = await User.findById(user._id).select("-password -refreshToken");
@@ -136,7 +149,7 @@ const logoutUser = asynchandler(async (req, res) => {
         {
             $set: { refreshToken: undefined }
         },
-        { new: true }
+        { returnDocument: 'after' }
     )
     const options = {
         httpOnly: true,
@@ -209,18 +222,19 @@ const getcurrentuser = asynchandler(async (req, res) => {
 })
 
 const updateProfile = asynchandler(async (req, res) => {
-    const { fullName, email } = req.body || {};
-    if (!fullName || !email) {
+    const { fullName, fullname, email } = req.body || {};
+    const nameToUpdate = (fullName || fullname)?.trim();
+    if (!nameToUpdate || !email) {
         throw new ApiError(400, "Full name and email are required")
     }
     const updatedUser = await User.findByIdAndUpdate(req.user?._id,
         {
             $set: {
-                fullname,
-                email: email
+                fullname: nameToUpdate,
+                email: email.trim().toLowerCase()
             }
         }, {
-        new: true
+        returnDocument: 'after'
     }
     ).select("-password -refreshToken")
     return res
@@ -244,7 +258,7 @@ const updateUserAvatar = asynchandler(async (req, res) => {
                 avatar: avatar.url
             }
         },
-        { new: true }
+        { returnDocument: 'after' }
     ).select("-password ")
     return res
         .status(200)
@@ -267,7 +281,7 @@ const updateUserCoverimage = asynchandler(async (req, res) => {
                 coverimage: coverimage.url
             }
         },
-        { new: true }
+        { returnDocument: 'after' }
     ).select("-password ")
     return res
         .status(200)

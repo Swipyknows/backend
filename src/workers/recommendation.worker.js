@@ -55,7 +55,7 @@ export const userInterestWorker = new Worker(
         if (!user) return;
 
         // Fetch liked videos as well
-        const userLikes = await Like.find({ likedby: userId, video: { $exists: true } })
+        const userLikes = await Like.find({ likedBy: userId, video: { $exists: true } })
             .sort({ createdAt: -1 })
             .limit(20)
             .populate({ path: "video", select: "descriptionVector" });
